@@ -2,6 +2,9 @@
 
 Backend API for Avira Vastra, a premium Indian saree e-commerce platform.
 
+**Last Updated**: February 3, 2026  
+**Status**: Production Ready ✅
+
 ## 🚀 Features
 
 - **Authentication**: Google OAuth & JWT-based authentication
