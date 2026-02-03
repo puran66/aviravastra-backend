@@ -80,6 +80,25 @@ app.use('/api/webhooks', webhookRoutes);
 
 
 
+// Welcome Route
+app.get('/', (req, res) => {
+    res.json({
+        status: 'success',
+        message: 'Welcome to Avira Vastra API',
+        version: '1.0.0',
+        endpoints: {
+            products: '/api/products',
+            categories: '/api/categories',
+            orders: '/api/orders',
+            collections: '/api/collections',
+            occasions: '/api/occasions',
+            auth: '/api/auth',
+            health: '/health'
+        },
+        documentation: 'https://github.com/puran66/aviravastra-backend'
+    });
+});
+
 // Health Check
 app.get('/health', (req, res) => {
     res.json({ status: 'success', message: 'AviraVastra API is running' });
