@@ -15,7 +15,7 @@ const getGoogleClient = () => {
  * Generate JWT Token
  */
 const generateToken = (id) => {
-    return jwt.sign({ id }, process.env.JWT_SECRET, {
+    return jwt.sign({ id: id.toString() }, process.env.JWT_SECRET, {
         expiresIn: '30d',
     });
 };
