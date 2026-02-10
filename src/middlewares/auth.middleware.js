@@ -91,4 +91,25 @@ const protectAdminOrCustomer = async (req, res, next) => {
     }
 };
 
-module.exports = { protectAdmin, protectCustomer, protectAdminOrCustomer };
+const softProtectCustomer = async (req, res, next) => {
+    let token;
+
+    if (
+        req.headers.authorization &&
+        req.headers.authorization.startsWith('Bearer')
+    ) {
+        try {
+            token = req.headers.authorization.split(' ')[1];
+            const decoded = jwt.verify(token, process.env.JWT_SECRET);
+            req.customer = await Customer.findById(decoded.id);
+            return next();
+        } catch (error) {
+            // Ignore error for soft protect
+            return next();
+        }
+    }
+
+    next();
+};
+
+module.exports = { protectAdmin, protectCustomer, protectAdminOrCustomer, softProtectCustomer };

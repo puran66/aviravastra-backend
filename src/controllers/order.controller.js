@@ -29,13 +29,38 @@ const createOrder = async (req, res) => {
     }
 
     // 1. Manage/Create Customer
-    let customer = await Customer.findOne({ phone });
-    if (!customer) {
-        customer = await Customer.create({
-            phone,
-            name: customerName,
-            email
-        });
+    let customer;
+
+    if (req.customer) {
+        customer = req.customer;
+        // Sync phone if not present
+        if (!customer.phone && phone) {
+            customer.phone = phone;
+            await customer.save();
+        }
+    } else {
+        // Try to find by unique email first
+        customer = await Customer.findOne({ email });
+
+        if (!customer && phone) {
+            // Try by phone as backup
+            customer = await Customer.findOne({ phone });
+        }
+
+        if (!customer) {
+            // Create new guest/customer record
+            customer = await Customer.create({
+                phone,
+                name: customerName,
+                email
+            });
+        } else {
+            // Update phone if missing in existing record
+            if (!customer.phone && phone) {
+                customer.phone = phone;
+                await customer.save();
+            }
+        }
     }
 
     // 2. Prepare Order Data
@@ -92,7 +117,17 @@ const createOrder = async (req, res) => {
 // @route   GET /api/orders/:id
 // @access  Private (Admin or Owner)
 const getOrderById = async (req, res) => {
-    const order = await Order.findById(req.params.id).populate('customer', 'name phone email');
+    let order;
+
+    // Try finding by internal ID first if it looks like a MongoDB ID
+    if (req.params.id.match(/^[0-9a-fA-F]{24}$/)) {
+        order = await Order.findById(req.params.id).populate('customer', 'name phone email');
+    }
+
+    // If not found or not a MongoDB ID, try human-friendly orderId
+    if (!order) {
+        order = await Order.findOne({ orderId: req.params.id }).populate('customer', 'name phone email');
+    }
 
     if (!order) {
         res.status(404);

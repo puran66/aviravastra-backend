@@ -12,7 +12,7 @@ const {
 } = require('../controllers/order.controller');
 
 
-const { protectAdmin, protectAdminOrCustomer, protectCustomer } = require('../middlewares/auth.middleware');
+const { protectAdmin, protectAdminOrCustomer, protectCustomer, softProtectCustomer } = require('../middlewares/auth.middleware');
 const validate = require('../middlewares/validate.middleware');
 const { orderSchema, updateStatusSchema } = require('../validators/order.validator');
 const { orderTrackLimiter } = require('../middlewares/rateLimiter');
@@ -25,7 +25,7 @@ router.route('/my-orders')
     .get(protectCustomer, getMyOrders);
 
 router.route('/')
-    .post(validate(orderSchema), createOrder)
+    .post(softProtectCustomer, validate(orderSchema), createOrder)
     .get(protectAdmin, getOrders);
 
 
