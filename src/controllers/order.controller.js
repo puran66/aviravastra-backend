@@ -121,12 +121,16 @@ const getOrderById = async (req, res) => {
 
     // Try finding by internal ID first if it looks like a MongoDB ID
     if (req.params.id.match(/^[0-9a-fA-F]{24}$/)) {
-        order = await Order.findById(req.params.id).populate('customer', 'name phone email');
+        order = await Order.findById(req.params.id)
+            .populate('customer', 'name phone email')
+            .populate('items.product', 'images');
     }
 
     // If not found or not a MongoDB ID, try human-friendly orderId
     if (!order) {
-        order = await Order.findOne({ orderId: req.params.id }).populate('customer', 'name phone email');
+        order = await Order.findOne({ orderId: req.params.id })
+            .populate('customer', 'name phone email')
+            .populate('items.product', 'images');
     }
 
     if (!order) {
@@ -230,7 +234,9 @@ const trackOrder = async (req, res) => {
 // @route   GET /api/orders
 // @access  Private/Admin
 const getOrders = async (req, res) => {
-    const orders = await Order.find({}).sort('-createdAt');
+    const orders = await Order.find({})
+        .populate('items.product', 'images')
+        .sort('-createdAt');
     res.json(orders);
 };
 
@@ -267,7 +273,9 @@ const cancelOrder = async (req, res) => {
 // @route   GET /api/orders/my-orders
 // @access  Private
 const getMyOrders = async (req, res) => {
-    const orders = await Order.find({ customer: req.customer._id }).sort('-createdAt');
+    const orders = await Order.find({ customer: req.customer._id })
+        .populate('items.product', 'images')
+        .sort('-createdAt');
     res.json(orders);
 };
 
