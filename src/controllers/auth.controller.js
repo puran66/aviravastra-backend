@@ -98,10 +98,7 @@ const googleLogin = async (req, res) => {
 
     const clientId = process.env.GOOGLE_CLIENT_ID;
 
-    // Server-side logging for debugging
-    console.log('🔍 Google Login Attempt...');
-    console.log('🔑 Server Google Client ID:', clientId ? '✅ LOADED' : '❌ NOT FOUND');
-
+    // Verify Google Token with trimmed credential
     try {
         // Verify Google Token with trimmed credential
         const ticket = await getGoogleClient().verifyIdToken({
@@ -111,8 +108,6 @@ const googleLogin = async (req, res) => {
 
         const payload = ticket.getPayload();
         const { sub: googleId, email, name, picture: avatar } = payload;
-
-        console.log('✅ Token Verified for:', email);
 
         // Find or Create Customer
         let customer = await Customer.findOne({ $or: [{ googleId }, { email }] });
@@ -124,7 +119,6 @@ const googleLogin = async (req, res) => {
             await customer.save();
         } else {
             customer = await Customer.create({ googleId, name, email, avatar });
-            console.log('🆕 New Customer Created:', email);
         }
 
         res.json({
@@ -137,13 +131,8 @@ const googleLogin = async (req, res) => {
             token: generateToken(customer._id),
         });
     } catch (error) {
-        console.error('🛑 Verification Failed:', error.message);
         res.status(401).json({
-            message: 'Invalid Google token',
-            debug: {
-                error: error.message,
-                clientIdLoaded: !!clientId
-            }
+            message: 'Invalid Google token'
         });
     }
 };

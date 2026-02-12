@@ -321,8 +321,6 @@ const retryPayment = async (req, res) => {
 
         await order.save();
 
-        console.log(`[Payment Retry] New Razorpay Order ${razorpayOrder.id} created for Order ${order.orderId}`);
-
         res.json(order);
     } catch (error) {
         console.error('[Payment Retry Error]', error.message);
@@ -346,8 +344,6 @@ const cleanupExpiredOrders = async () => {
 
         if (expiredOrders.length === 0) return;
 
-        console.log(`[Order Cleanup] Found ${expiredOrders.length} expired orders. Processing...`);
-
         for (const order of expiredOrders) {
             // Atomic check to ensure we don't cancel if payment just arrived
             const updatedOrder = await Order.findOneAndUpdate(
@@ -358,7 +354,6 @@ const cleanupExpiredOrders = async () => {
 
             if (updatedOrder) {
                 await updateStock(order.items, 'INCREASE');
-                console.log(`[Cleanup] Cancelled Order ${order.orderId} and restored stock.`);
             }
         }
     } catch (err) {
