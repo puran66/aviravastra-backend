@@ -2,6 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const morgan = require('morgan');
 const helmet = require('helmet');
+const compression = require('compression');
 const { notFound, errorHandler } = require('./middlewares/error.middleware');
 
 const productRoutes = require('./routes/product.routes');
@@ -17,34 +18,25 @@ const occasionRoutes = require('./routes/occasion.routes.js');
 const collectionRoutes = require('./routes/collection.routes.js');
 const webhookRoutes = require('./routes/webhook.routes');
 
-
-
-
 const app = express();
 
-// Security Middleware
+// Security & Optimization Middleware
 app.use(helmet());
+app.use(compression()); // Compress all responses for better performance
 
-// CORS Configuration - Allow both localhost and IP-based development
+// CORS Configuration
 const allowedOrigins = [
     'http://localhost:5173',
-    'http://192.168.29.176:5173',
-    'http://localhost:3000', // For future admin panel
-    "https://aviravastra.vercel.app"
-];
+    'http://localhost:3000',
+    "https://aviravastra.vercel.app",
+    process.env.FRONTEND_URL // Allow dynamically from ENV
+].filter(Boolean);
 
 const corsOptions = {
     origin: function (origin, callback) {
-        // Allow requests with no origin (like mobile apps, Postman, curl)
-        if (!origin) return callback(null, true);
-
-        // Remove trailing slash if present for comparison
-        const normalizedOrigin = origin.endsWith('/') ? origin.slice(0, -1) : origin;
-
-        if (allowedOrigins.includes(normalizedOrigin)) {
+        if (!origin || allowedOrigins.includes(origin.endsWith('/') ? origin.slice(0, -1) : origin)) {
             callback(null, true);
         } else {
-            console.warn(`🚫 CORS blocked origin: ${origin}`);
             callback(new Error('Not allowed by CORS'));
         }
     },
@@ -55,11 +47,11 @@ const corsOptions = {
 app.use(cors(corsOptions));
 
 // Parsing Middleware
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// Logging
-if (process.env.NODE_ENV === 'development') {
+// Logging (Only in development)
+if (process.env.NODE_ENV !== 'production') {
     app.use(morgan('dev'));
 }
 

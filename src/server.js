@@ -17,10 +17,12 @@ const { cleanupExpiredOrders } = require('./controllers/order.controller');
 // Connect to Database
 connectDB().then(() => {
     app.listen(PORT, '0.0.0.0', () => {
-        console.log(`Server running in ${process.env.NODE_ENV || 'development'} mode on port ${PORT}`);
-        console.log(`🌐 Accessible at:`);
-        console.log(`   - http://localhost:${PORT}`);
-        console.log(`   - http://192.168.29.176:${PORT}`);
+        if (process.env.NODE_ENV !== 'production') {
+            console.log(`🚀 Server ready in ${process.env.NODE_ENV || 'development'} mode on port ${PORT}`);
+            console.log(`🔗 Local: http://localhost:${PORT}`);
+        } else {
+            console.log(`🚀 Server running on port ${PORT}`);
+        }
 
         // Start Periodic Stock Cleanup (Every 15 minutes)
         setInterval(cleanupExpiredOrders, 15 * 60 * 1000);

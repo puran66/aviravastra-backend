@@ -30,8 +30,6 @@ const handleRazorpayWebhook = async (req, res) => {
     const event = req.body.event;
     const payload = req.body.payload;
 
-    console.log(`[Webhook Received] Event: ${event}`);
-
     try {
         if (event === 'payment.captured') {
             const payment = payload.payment.entity;
@@ -51,7 +49,6 @@ const handleRazorpayWebhook = async (req, res) => {
             );
 
             if (!order) {
-                console.log(`[Webhook Info] Order ${razorpayOrderId} already marked as PAID or not found.`);
                 return res.status(200).json({ status: 'ok' });
             }
 
@@ -59,8 +56,6 @@ const handleRazorpayWebhook = async (req, res) => {
             // We only need to ensure notifications are sent if this is the first time we mark it PAID.
             await sendWhatsAppNotification(order);
             await sendOrderEmail(order);
-
-            console.log(`[Webhook Success] Order ${order.orderId} finalized via webhook.`);
         }
         else if (event === 'payment.failed') {
             const payment = payload.payment.entity;
