@@ -20,6 +20,9 @@ const webhookRoutes = require('./routes/webhook.routes');
 
 const app = express();
 
+// Set trust proxy for Render/Vercel load balancers
+app.set('trust proxy', 1);
+
 // Security & Optimization Middleware
 app.use(helmet());
 app.use(compression()); // Compress all responses for better performance
