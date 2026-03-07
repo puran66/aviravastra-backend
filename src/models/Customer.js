@@ -40,6 +40,11 @@ const customerSchema = new mongoose.Schema({
     }
 }, { timestamps: true });
 
+// ─── Performance Indexes ────────────────────────────────────────────────────
+// Admin listing sorted by newest
+customerSchema.index({ createdAt: -1 });
+
+
 // Hash password before saving
 customerSchema.pre('save', async function () {
     if (!this.isModified('password') || !this.password) {

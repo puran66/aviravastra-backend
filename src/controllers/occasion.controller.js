@@ -6,7 +6,13 @@ const Occasion = require('../models/Occasion');
 const getOccasions = async (req, res) => {
     try {
         const filter = req.query.isActive === 'true' ? { isActive: true } : {};
-        const occasions = await Occasion.find(filter).sort({ sortOrder: 1, createdAt: -1 });
+        const occasions = await Occasion.find(filter)
+            .select('-__v')
+            .sort({ sortOrder: 1, createdAt: -1 })
+            .lean();
+
+        // Occasions change infrequently — cache for 60 s
+        res.set('Cache-Control', 'public, max-age=60, stale-while-revalidate=30');
         res.json(occasions);
     } catch (err) {
         res.status(500).json({ message: 'Server error' });

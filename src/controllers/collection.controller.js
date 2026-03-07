@@ -6,7 +6,13 @@ const Collection = require('../models/Collection');
 const getCollections = async (req, res) => {
     try {
         const filter = req.query.isActive === 'true' ? { isActive: true } : {};
-        const collections = await Collection.find(filter).sort({ sortOrder: 1, createdAt: -1 });
+        const collections = await Collection.find(filter)
+            .select('-__v')
+            .sort({ sortOrder: 1, createdAt: -1 })
+            .lean();
+
+        // Collections change infrequently — cache for 60 s
+        res.set('Cache-Control', 'public, max-age=60, stale-while-revalidate=30');
         res.json(collections);
     } catch (err) {
         res.status(500).json({ message: 'Server error' });

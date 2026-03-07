@@ -53,9 +53,11 @@ const handleRazorpayWebhook = async (req, res) => {
             }
 
             // Note: Stock was already reduced during order creation in this system's flow.
-            // We only need to ensure notifications are sent if this is the first time we mark it PAID.
-            await sendWhatsAppNotification(order);
-            await sendOrderEmail(order);
+            // Non-blocking: Razorpay expects 200 OK quickly — don't await notifications
+            Promise.all([
+                sendWhatsAppNotification(order),
+                sendOrderEmail(order)
+            ]).catch(() => { }); // Fire-and-forget
         }
         else if (event === 'payment.failed') {
             const payment = payload.payment.entity;
@@ -66,7 +68,6 @@ const handleRazorpayWebhook = async (req, res) => {
                 return res.status(200).json({ status: 'ok' });
             }
 
-            // Mark as FAILED and restore stock
             const failedOrder = await Order.findOneAndUpdate(
                 { _id: order._id, paymentStatus: { $ne: 'PAID' }, orderStatus: { $ne: 'CANCELLED' } },
                 { paymentStatus: 'FAILED', orderStatus: 'CANCELLED' },
@@ -75,7 +76,6 @@ const handleRazorpayWebhook = async (req, res) => {
 
             if (failedOrder) {
                 await updateStock(failedOrder.items, 'INCREASE');
-                console.log(`[Webhook Fail] Order ${failedOrder.orderId} marked failed and stock restored.`);
             }
         }
 

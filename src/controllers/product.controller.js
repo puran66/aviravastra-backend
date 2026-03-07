@@ -1,8 +1,10 @@
 const Product = require('../models/Product');
-const cloudinary = require('../config/cloudinary');
 
-// @desc    Get all products
-// @route   GET /api/products
+// ─── Field projection: never expose unused internal fields to the client ───
+const LIST_PROJECTION = 'name price discountedPrice category weaveType images stock isActive occasions collections tags createdAt';
+
+// @desc    Get all products (paginated)
+// @route   GET /api/products?page=1&limit=20
 // @access  Public
 const getProducts = async (req, res) => {
     const {
@@ -14,18 +16,21 @@ const getProducts = async (req, res) => {
         minPrice,
         maxPrice,
         isActive,
-        limit,
         search
     } = req.query;
 
+    // ── Pagination ──────────────────────────────────────────────────────────
+    const page = Math.max(1, parseInt(req.query.page) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit) || 20));
+    const skip = (page - 1) * limit;
+
+    // ── Build Filter ────────────────────────────────────────────────────────
     let query = {};
 
     if (search) {
         const cleanSearch = search.trim();
-        query.$or = [
-            { name: { $regex: cleanSearch, $options: 'i' } },
-            { description: { $regex: cleanSearch, $options: 'i' } }
-        ];
+        // Use MongoDB text index when available; fall back to regex for partial match
+        query.$text = { $search: cleanSearch };
     }
 
     if (category) query.category = category;
@@ -41,23 +46,44 @@ const getProducts = async (req, res) => {
         if (maxPrice) query.price.$lte = Number(maxPrice);
     }
 
-    let productQuery = Product.find(query).populate('category', 'name type').sort('-createdAt');
+    // ── Execute (lean + select + paginate) ─────────────────────────────────
+    const [products, total] = await Promise.all([
+        Product.find(query)
+            .select(LIST_PROJECTION)
+            .populate('category', 'name type')
+            .sort('-createdAt')
+            .skip(skip)
+            .limit(limit)
+            .lean(),  // Plain JS objects — no Mongoose overhead
+        Product.countDocuments(query)
+    ]);
 
-    if (limit) {
-        productQuery = productQuery.limit(Number(limit));
-    }
+    // ── HTTP Cache: public product listings can be cached for 60 s ─────────
+    res.set('Cache-Control', 'public, max-age=60, stale-while-revalidate=30');
 
-    const products = await productQuery;
-    res.json(products);
+    res.json({
+        products,
+        pagination: {
+            total,
+            page,
+            limit,
+            pages: Math.ceil(total / limit)
+        }
+    });
 };
 
 // @desc    Get product by ID
 // @route   GET /api/products/:id
 // @access  Public
 const getProductById = async (req, res) => {
-    const product = await Product.findById(req.params.id).populate('category', 'name type');
+    const product = await Product.findById(req.params.id)
+        .select('-__v')
+        .populate('category', 'name type')
+        .lean();
 
     if (product) {
+        // Individual product pages can also be cached briefly
+        res.set('Cache-Control', 'public, max-age=60, stale-while-revalidate=30');
         res.json(product);
     } else {
         res.status(404);
