@@ -15,23 +15,38 @@ const generateToken = (id) => {
 // @access  Private/Admin
 const getDashboardStats = async (req, res) => {
     try {
-        const totalOrders = await Order.countDocuments();
-        const totalCustomers = await Customer.countDocuments();
-        const totalProducts = await Product.countDocuments();
+        // Run all independent aggregations in parallel
+        const [
+            totalOrders,
+            totalCustomers,
+            totalProducts,
+            revenueResult,
+            pendingOrders,
+            recentOrders
+        ] = await Promise.all([
+            Order.countDocuments(),
+            Customer.countDocuments(),
+            Product.countDocuments(),
 
-        // Calculate total revenue from PAID orders
-        const paidOrders = await Order.find({ paymentStatus: 'PAID' });
-        const revenue = paidOrders.reduce((acc, order) => acc + order.totalAmount, 0);
+            // Single aggregation instead of loading all paid orders into memory
+            Order.aggregate([
+                { $match: { paymentStatus: 'PAID' } },
+                { $group: { _id: null, total: { $sum: '$totalAmount' } } }
+            ]),
 
-        // Get recent orders
-        const recentOrders = await Order.find({})
-            .sort('-createdAt')
-            .limit(5);
+            Order.countDocuments({
+                orderStatus: { $in: ['PLACED', 'AWAITING_PAYMENT'] }
+            }),
 
-        // Get pending orders count
-        const pendingOrders = await Order.countDocuments({
-            orderStatus: { $in: ['PLACED', 'AWAITING_PAYMENT'] }
-        });
+            // Recent 5 orders — lean + select only what the dashboard needs
+            Order.find({})
+                .select('orderId customerName totalAmount orderStatus paymentStatus createdAt')
+                .sort('-createdAt')
+                .limit(5)
+                .lean()
+        ]);
+
+        const revenue = revenueResult.length > 0 ? revenueResult[0].total : 0;
 
         res.json({
             stats: {
@@ -72,7 +87,7 @@ const loginAdmin = async (req, res) => {
 // @route   GET /api/admin/profile
 // @access  Private
 const getAdminProfile = async (req, res) => {
-    const admin = await Admin.findById(req.admin._id);
+    const admin = await Admin.findById(req.admin._id).select('-password').lean();
 
     if (admin) {
         res.json({
@@ -85,24 +100,58 @@ const getAdminProfile = async (req, res) => {
     }
 };
 
-// @desc    Get all customers with order summary
-// @route   GET /api/admin/customers
+// @desc    Get all customers with order summary (paginated)
+// @route   GET /api/admin/customers?page=1&limit=20
 // @access  Private/Admin
 const getCustomers = async (req, res) => {
-    const customers = await Customer.find({}).sort('-createdAt');
+    const page = Math.max(1, parseInt(req.query.page) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit) || 20));
+    const skip = (page - 1) * limit;
 
-    const customersWithOrders = await Promise.all(customers.map(async (cust) => {
-        const orderCount = await Order.countDocuments({ customer: cust._id });
-        const lastOrder = await Order.findOne({ customer: cust._id }).sort('-createdAt');
+    const [customers, total] = await Promise.all([
+        Customer.find({})
+            .select('name email phone avatar createdAt')
+            .sort('-createdAt')
+            .skip(skip)
+            .limit(limit)
+            .lean(),
+        Customer.countDocuments()
+    ]);
 
-        return {
-            ...cust.toObject(),
-            totalOrders: orderCount,
-            lastOrderDate: lastOrder ? lastOrder.createdAt : null
+    // Single aggregation to get order counts for all customers in one query
+    // instead of N+1 queries per customer
+    const customerIds = customers.map(c => c._id);
+
+    const orderStats = await Order.aggregate([
+        { $match: { customer: { $in: customerIds } } },
+        {
+            $group: {
+                _id: '$customer',
+                totalOrders: { $sum: 1 },
+                lastOrderDate: { $max: '$createdAt' }
+            }
+        }
+    ]);
+
+    // Map aggregation results by customer ID for O(1) lookup
+    const statsMap = {};
+    for (const stat of orderStats) {
+        statsMap[stat._id.toString()] = {
+            totalOrders: stat.totalOrders,
+            lastOrderDate: stat.lastOrderDate
         };
+    }
+
+    const customersWithOrders = customers.map(cust => ({
+        ...cust,
+        totalOrders: statsMap[cust._id.toString()]?.totalOrders || 0,
+        lastOrderDate: statsMap[cust._id.toString()]?.lastOrderDate || null
     }));
 
-    res.json(customersWithOrders);
+    res.json({
+        customers: customersWithOrders,
+        pagination: { total, page, limit, pages: Math.ceil(total / limit) }
+    });
 };
 
 module.exports = {
@@ -111,4 +160,3 @@ module.exports = {
     getCustomers,
     getDashboardStats,
 };
-

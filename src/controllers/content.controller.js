@@ -2,11 +2,14 @@ const ContentSettings = require('../models/content.model');
 
 const getContent = async (req, res) => {
     try {
-        let content = await ContentSettings.findOne();
+        let content = await ContentSettings.findOne().select('-__v').lean();
         if (!content) {
-            // Create default if not exists
+            // Create default if not exists and return
             content = await ContentSettings.create({});
         }
+
+        // Homepage content is public + rarely changes — cache for 60 s
+        res.set('Cache-Control', 'public, max-age=60, stale-while-revalidate=30');
         res.json(content);
     } catch (err) {
         res.status(500).json({ message: 'Error fetching content settings' });

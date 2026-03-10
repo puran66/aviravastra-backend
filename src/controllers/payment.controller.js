@@ -23,11 +23,11 @@ const verifyPayment = async (req, res) => {
 
     const generated_signature = crypto
         .createHmac('sha256', process.env.RAZORPAY_KEY_SECRET)
-        .update(razorpay_order_id + "|" + razorpay_payment_id)
+        .update(razorpay_order_id + '|' + razorpay_payment_id)
         .digest('hex');
 
     if (generated_signature === razorpay_signature) {
-        // 2. Atomic Status Update: Ensure we only mark as PAID if it's currently PENDING/FAILED
+        // 2. Atomic Status Update
         const updatedOrder = await Order.findOneAndUpdate(
             { _id: order._id, paymentStatus: { $ne: 'PAID' } },
             {
@@ -43,11 +43,14 @@ const verifyPayment = async (req, res) => {
             return res.json({ success: true, message: 'Payment already verified' });
         }
 
-        // 3. Notify admin and customer (Only happens once due to atomic check above)
-        await sendWhatsAppNotification(updatedOrder);
-        await sendOrderEmail(updatedOrder);
+        // 3. Non-blocking notifications — respond to client immediately
+        Promise.all([
+            sendWhatsAppNotification(updatedOrder),
+            sendOrderEmail(updatedOrder)
+        ]).catch(() => { }); // Fire-and-forget; failures must never block the response
 
         res.json({ success: true, message: 'Payment verified successfully' });
+
     } else {
         // 4. Mark as FAILED and CANCELLED, then restore stock
         const failedOrder = await Order.findOneAndUpdate(

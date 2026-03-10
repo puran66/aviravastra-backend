@@ -79,4 +79,18 @@ const orderSchema = new mongoose.Schema({
 
 }, { timestamps: true });
 
+// ─── Performance Indexes ────────────────────────────────────────────────────
+// Admin order list (sorted by newest)
+orderSchema.index({ createdAt: -1 });
+// Customer's own orders
+orderSchema.index({ customer: 1, createdAt: -1 });
+// Payment verification / webhook lookup
+orderSchema.index({ razorpayOrderId: 1 });
+// Cleanup job: finds expired AWAITING_PAYMENT orders quickly
+orderSchema.index({ orderStatus: 1, paymentStatus: 1, createdAt: 1 });
+// Public order tracking  (orderId is already unique; add email for combined lookup)
+orderSchema.index({ orderId: 1, email: 1 });
+// Admin filter by payment status
+orderSchema.index({ paymentStatus: 1, createdAt: -1 });
+
 module.exports = mongoose.model('Order', orderSchema);

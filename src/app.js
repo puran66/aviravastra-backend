@@ -4,6 +4,7 @@ const morgan = require('morgan');
 const helmet = require('helmet');
 const compression = require('compression');
 const { notFound, errorHandler } = require('./middlewares/error.middleware');
+const { generalApiLimiter } = require('./middlewares/rateLimiter');
 
 const productRoutes = require('./routes/product.routes');
 const categoryRoutes = require('./routes/category.routes');
@@ -23,16 +24,16 @@ const app = express();
 // Set trust proxy for Render/Vercel load balancers
 app.set('trust proxy', 1);
 
-// Security & Optimization Middleware
+// ─── Security & Optimization Middleware ─────────────────────────────────────
 app.use(helmet());
-app.use(compression()); // Compress all responses for better performance
+app.use(compression()); // Gzip compress all responses
 
-// CORS Configuration
+// ─── CORS Configuration ──────────────────────────────────────────────────────
 const allowedOrigins = [
     'http://localhost:5173',
     'http://localhost:3000',
-    "https://aviravastra.vercel.app",
-    process.env.FRONTEND_URL // Allow dynamically from ENV
+    'https://aviravastra.vercel.app',
+    process.env.FRONTEND_URL
 ].filter(Boolean);
 
 const corsOptions = {
@@ -49,16 +50,26 @@ const corsOptions = {
 };
 app.use(cors(corsOptions));
 
-// Parsing Middleware
+// ─── Parsing Middleware ──────────────────────────────────────────────────────
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// Logging (Only in development)
-if (process.env.NODE_ENV !== 'production') {
-    app.use(morgan('dev'));
+// ─── Logging ─────────────────────────────────────────────────────────────────
+// 'dev'      → colorized, verbose — good for development debugging
+// 'combined' → Apache-style log — useful in production for access tracking
+if (process.env.NODE_ENV === 'production') {
+    app.use(morgan('combined'));   // Structured access log for production
+} else {
+    app.use(morgan('dev'));        // Verbose dev format
 }
 
-// Routes
+// ─── Global Rate Limiting ────────────────────────────────────────────────────
+// Applied before routes — limits 100 req/min per IP to prevent scraping/DoS.
+// Individual sensitive routes (login, payments, tracking) have stricter limiters.
+// Webhooks bypass via their own IP-verification (Razorpay signature).
+app.use('/api', generalApiLimiter);
+
+// ─── Routes ──────────────────────────────────────────────────────────────────
 app.use('/api/products', productRoutes);
 app.use('/api/categories', categoryRoutes);
 app.use('/api/orders', orderRoutes);
@@ -72,10 +83,7 @@ app.use('/api/occasions', occasionRoutes);
 app.use('/api/collections', collectionRoutes);
 app.use('/api/webhooks', webhookRoutes);
 
-
-
-
-// Welcome Route
+// ─── Welcome Route ───────────────────────────────────────────────────────────
 app.get('/', (req, res) => {
     res.json({
         status: 'success',
@@ -94,12 +102,12 @@ app.get('/', (req, res) => {
     });
 });
 
-// Health Check
+// ─── Health Check ────────────────────────────────────────────────────────────
 app.get('/health', (req, res) => {
     res.json({ status: 'success', message: 'AviraVastra API is running' });
 });
 
-// Error Handling
+// ─── Error Handling ──────────────────────────────────────────────────────────
 app.use(notFound);
 app.use(errorHandler);
 

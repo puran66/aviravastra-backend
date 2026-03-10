@@ -1,19 +1,31 @@
 const nodemailer = require('nodemailer');
 
-const sendOrderEmail = async (order) => {
-    if (process.env.ENABLE_EMAIL !== 'true') return;
-
-    try {
-        const transporter = nodemailer.createTransport({
+// ─── Singleton transporter ───────────────────────────────────────────────────
+// Creating a new transporter on every email call wastes resources on each TLS
+// handshake + connection setup. A singleton reuses the SMTP connection pool.
+let _transporter;
+const getTransporter = () => {
+    if (!_transporter) {
+        _transporter = nodemailer.createTransport({
             host: process.env.SMTP_HOST,
-            port: process.env.SMTP_PORT,
+            port: parseInt(process.env.SMTP_PORT) || 587,
             secure: process.env.SMTP_PORT === '465',
             auth: {
                 user: process.env.SMTP_USER,
                 pass: process.env.SMTP_PASS,
             },
+            pool: true,          // Reuse SMTP connections
+            maxConnections: 3,   // Keep at most 3 SMTP connections alive
+            maxMessages: 100,    // Recycle connection after 100 messages
         });
+    }
+    return _transporter;
+};
 
+const sendOrderEmail = async (order) => {
+    if (process.env.ENABLE_EMAIL !== 'true') return;
+
+    try {
         const itemsHtml = order.items.map(item => `
             <tr>
                 <td style="padding: 10px; border-bottom: 1px solid #eee;">${item.name}</td>
@@ -81,10 +93,10 @@ const sendOrderEmail = async (order) => {
             `,
         };
 
-        await transporter.sendMail(mailOptions);
+        await getTransporter().sendMail(mailOptions);
     } catch (error) {
-        console.error('Email sending failed:', error);
-        // We do not throw error here to avoid blocking the order flow
+        // Never throw — email failures must not break the order flow
+        console.error('[Email Error]', error.message);
     }
 };
 
